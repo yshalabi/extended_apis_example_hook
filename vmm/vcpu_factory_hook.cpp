@@ -35,7 +35,6 @@ namespace test
 
 bfn::once_flag flag{};
 
-ept::mmap g_guest_map{};
 ept::mmap::entry_type g_guest_pte_shadow{};
 
 // vCPU Subclass
@@ -68,6 +67,7 @@ class vcpu : public eapis::intel_x64::vcpu
     // the possibility of accidentally dereferencing a nullptr.
     //
     std::reference_wrapper<ept::mmap::entry_type> m_pte{g_guest_pte_shadow};
+    ept::mmap vcpu_guest_map{};
 
 public:
 
@@ -118,12 +118,12 @@ public:
         // this example is a global resource so it only needs to be set up
         // once and then can be used by the remaining cores.
         //
-        bfn::call_once(flag, [&] {
+        //bfn::call_once(flag, [&] {
             ept::identity_map(
-                g_guest_map,
+                vcpu_guest_map,
                 MAX_PHYS_ADDR
             );
-        });
+        //});
     }
 
     bool
@@ -191,13 +191,13 @@ public:
         // the PTE of just the 4k page that has our hello_world() application.
         //
         ept::identity_map_convert_2m_to_4k(
-            g_guest_map,
+            vcpu_guest_map,
             bfn::upper(m_hello_world_gpa, ::intel_x64::ept::pd::from)
         );
 
         // Get the 4k PTE associated with our hello_world() application
         //
-        auto [pte, ignored2] = g_guest_map.entry(m_hello_world_gpa);
+        auto [pte, ignored2] = vcpu_guest_map.entry(m_hello_world_gpa);
 
         m_pte = pte;
         bfignored(ignored2);
@@ -212,7 +212,7 @@ public:
 
         // Tell the VMCS to use our new EPT map
         //
-        this->set_eptp(g_guest_map);
+        this->set_eptp(vcpu_guest_map);
     }
 
     bool ept_execute_violation_handler(
@@ -283,7 +283,7 @@ public:
         // over, and over without our EPT map getting distorted over time.
         //
         ept::identity_map_convert_4k_to_2m(
-            g_guest_map,
+            vcpu_guest_map,
             bfn::upper(m_hello_world_gpa, ::intel_x64::ept::pd::from)
         );
 
